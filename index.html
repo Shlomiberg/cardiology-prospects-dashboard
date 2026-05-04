@@ -1395,5 +1395,46 @@ function updateColumnHeaders() {
 
 init();
 </script>
+  <script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js";
+  import {
+    getDatabase,
+    ref,
+    set,
+    onValue
+  } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-database.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyCzuSOUK0vLaBGbLwnhtLIjQmzrFcOxGZM",
+    authDomain: "cardiology-prospects-dashboard.firebaseapp.com",
+    databaseURL: "https://cardiology-prospects-dashboard-default-rtdb.firebaseio.com",
+    projectId: "cardiology-prospects-dashboard",
+    storageBucket: "cardiology-prospects-dashboard.firebasestorage.app",
+    messagingSenderId: "931341593264",
+    appId: "1:931341593264:web:0151566f5e4194e7ace975"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+
+  const DEFAULT_SYNC_ID = "reds-prospects-9f4b7c2a-2026";
+
+  function getSyncId() {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("sync") || DEFAULT_SYNC_ID;
+  }
+
+  const syncId = getSyncId();
+  const stateRef = ref(db, `dashboardStates/${syncId}`);
+
+  window.firebaseDashboardSync = {
+    set,
+    onValue,
+    stateRef,
+    syncId
+  };
+
+  window.dispatchEvent(new Event("firebaseDashboardSyncReady"));
+</script>
 </body>
 </html>
