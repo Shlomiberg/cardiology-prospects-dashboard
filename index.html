@@ -340,6 +340,17 @@ tr.removing td{animation:rowFadeOut .35s ease forwards;overflow:hidden}
   </div>
 
   <div class="fav-bar">
+    <div class="control-group">
+      <span class="control-label">User</span>
+      <select class="filter-select" id="userSelect">
+        <option value="John">John</option>
+        <option value="Lucy">Lucy</option>
+        <option value="Susan">Susan</option>
+        <option value="Mark">Mark</option>
+        <option value="Kathy">Kathy</option>
+        <option value="All">All</option>
+      </select>
+    </div>
     <button class="fav-toggle" id="favToggle" onclick="toggleFavView()">
       &#x2B50; Favorites <span class="fav-count" id="favCount">0</span>
     </button>
@@ -417,16 +428,30 @@ const favorites = new Set();
 let favMode = false;
 let currentDetailRow = null;
 let lastToastContext = null;
+const USERS = ['John','Lucy','Susan','Mark','Kathy','All'];
+let selectedUser = localStorage.getItem('dashboardFavUser') || 'John';
+if (!USERS.includes(selectedUser)) selectedUser = 'John';
+let firebaseSyncReady = false;
+let favoritesUnsubscribe = null;
+let suppressFavoritePersist = false;
 
 const YEARS = ['2022','2023','2024','2025'];
 
 function init() {
+  initUserSelector();
   populateStates();
   initPatList();
   syncModeUI();
   applyFilters();
   bindEvents();
   updateColumnHeaders();
+  setupFirebaseSyncWhenReady();
+}
+
+function initUserSelector() {
+  const sel = document.getElementById('userSelect');
+  if (!sel) return;
+  sel.value = USERS.includes(selectedUser) ? selectedUser : 'John';
 }
 
 const selectedStates = new Set();
@@ -1000,7 +1025,71 @@ function closeDetail() {
   document.getElementById('detailBackdrop').classList.remove('open');
 }
 
+function parseFavoriteIdsPayload(payload) {
+  if (!payload) return [];
+  if (Array.isArray(payload)) return payload.filter(Boolean);
+  if (payload && Array.isArray(payload.ids)) return payload.ids.filter(Boolean);
+  return [];
+}
+
+function favoritesPayloadFromSet() {
+  return {
+    version: 1,
+    updatedAt: new Date().toISOString(),
+    ids: [...favorites].sort()
+  };
+}
+
+function setupFirebaseSyncWhenReady() {
+  if (window.firebaseDashboardSync?.stateRef) {
+    firebaseSyncReady = true;
+    subscribeFavoritesForSelectedUser();
+    return;
+  }
+  window.addEventListener('firebaseDashboardSyncReady', () => {
+    firebaseSyncReady = true;
+    subscribeFavoritesForSelectedUser();
+  }, { once: true });
+}
+
+function subscribeFavoritesForSelectedUser() {
+  if (!firebaseSyncReady || !window.firebaseDashboardSync?.onValue || !window.firebaseDashboardSync?.ref || !window.firebaseDashboardSync?.stateRef) return;
+  if (favoritesUnsubscribe) { favoritesUnsubscribe(); favoritesUnsubscribe = null; }
+  const { onValue, ref, stateRef } = window.firebaseDashboardSync;
+  const targetRef = selectedUser === 'All'
+    ? ref(stateRef, 'favoritesByUser')
+    : ref(stateRef, `favoritesByUser/${selectedUser}`);
+
+  favoritesUnsubscribe = onValue(targetRef, (snap) => {
+    suppressFavoritePersist = true;
+    favorites.clear();
+    if (selectedUser === 'All') {
+      const all = snap.val() || {};
+      Object.values(all).forEach(payload => {
+        parseFavoriteIdsPayload(payload).forEach(id => favorites.add(id));
+      });
+    } else {
+      parseFavoriteIdsPayload(snap.val()).forEach(id => favorites.add(id));
+    }
+    suppressFavoritePersist = false;
+    updateFavUI();
+    applyFilters();
+    if (currentDetailRow) updateDetailFavBtn();
+  });
+}
+
+function persistFavorites() {
+  if (suppressFavoritePersist || !firebaseSyncReady || selectedUser === 'All') return;
+  const sync = window.firebaseDashboardSync;
+  if (!sync?.set || !sync?.ref || !sync?.stateRef) return;
+  const targetRef = sync.ref(sync.stateRef, `favoritesByUser/${selectedUser}`);
+  sync.set(targetRef, favoritesPayloadFromSet()).catch(() => {
+    console.warn('Could not persist favorites to Firebase');
+  });
+}
+
 function toggleFav(row, btn) {
+  if (selectedUser === 'All') { alert('Switch to a specific user to edit favorites.'); return; }
   const wasStarred = favorites.has(row.id);
   if (wasStarred) {
     favorites.delete(row.id);
@@ -1010,10 +1099,12 @@ function toggleFav(row, btn) {
     favorites.add(row.id);
     if (btn) btn.classList.add('starred');
   }
+  persistFavorites();
   updateFavUI();
 }
 
 function toggleFavByIdx(idx, btn) {
+  if (selectedUser === 'All') { alert('Switch to a specific user to edit favorites.'); return; }
   const row = filtered[idx];
   if (!row) return;
   const wasStarred = favorites.has(row.id);
@@ -1024,6 +1115,7 @@ function toggleFavByIdx(idx, btn) {
       favorites.delete(row.id);
       updateFavUI();
       showToast(row.favoriteLabel, {type:'single', id:row.id});
+      persistFavorites();
       setTimeout(() => applyFilters(), 350);
     }
   } else {
@@ -1032,6 +1124,7 @@ function toggleFavByIdx(idx, btn) {
 }
 
 function toggleFavFromDetail() {
+  if (selectedUser === 'All') { alert('Switch to a specific user to edit favorites.'); return; }
   if (!currentDetailRow) return;
   const wasStarred = favorites.has(currentDetailRow.id);
   if (wasStarred) {
@@ -1040,6 +1133,7 @@ function toggleFavFromDetail() {
   } else {
     favorites.add(currentDetailRow.id);
   }
+  persistFavorites();
   updateDetailFavBtn();
   updateFavUI();
   renderTable();
@@ -1064,10 +1158,12 @@ function toggleFavView() {
 }
 
 function clearAllFavorites() {
+  if (selectedUser === 'All') { alert('Switch to a specific user to clear favorites.'); return; }
   if (favorites.size === 0) return;
   const count = favorites.size;
   const backup = new Set(favorites);
   favorites.clear();
+  persistFavorites();
   updateFavUI();
   applyFilters();
   showToast(`${count} favorite row${count!==1?'s':''}`, { type:'clear', backup, count });
@@ -1076,7 +1172,7 @@ function clearAllFavorites() {
 function updateFavUI() {
   const n = favorites.size;
   document.getElementById('favCount').textContent = n;
-  document.getElementById('clearAllBtn').style.display = n > 0 ? '' : 'none';
+  document.getElementById('clearAllBtn').style.display = n > 0 && selectedUser !== 'All' ? '' : 'none';
 }
 
 // Toast system
@@ -1104,6 +1200,7 @@ function undoRemove() {
   } else if (u.type === 'single') {
     favorites.add(u.id);
   }
+  persistFavorites();
   lastToastContext = null;
   updateFavUI();
   applyFilters();
@@ -1346,6 +1443,15 @@ function bindEvents() {
   document.addEventListener('keydown', e => { if (e.key==='Escape') closeDetail(); });
 
   document.getElementById('modeSwitch').addEventListener('change', e => setViewMode(e.target.checked ? 'location' : 'organization'));
+  document.getElementById('userSelect').addEventListener('change', e => {
+    selectedUser = e.target.value;
+    localStorage.setItem('dashboardFavUser', selectedUser);
+    favMode = false;
+    document.getElementById('favToggle').classList.remove('active');
+    subscribeFavoritesForSelectedUser();
+    updateFavUI();
+    applyFilters();
+  });
 
   document.querySelectorAll('#yearPill button').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -1430,6 +1536,7 @@ init();
   window.firebaseDashboardSync = {
     set,
     onValue,
+    ref,
     stateRef,
     syncId
   };
