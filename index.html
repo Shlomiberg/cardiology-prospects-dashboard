@@ -32,6 +32,7 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
 .header h1 span{color:var(--accent)}
 .header-sub{font-size:13px;color:var(--text3);margin-top:4px;font-weight:400}
 .header-right{display:flex;align-items:center;gap:10px}
+.version-indicator{font-size:11px;color:var(--text3);background:var(--surface2);border:1px solid var(--border);border-radius:999px;padding:3px 8px;line-height:1;box-shadow:var(--shadow-sm)}
 .year-pill{display:flex;background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;box-shadow:var(--shadow-sm)}
 .year-pill button{padding:8px 16px;border:none;background:transparent;color:var(--text2);font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;transition:all .15s;border-right:1px solid var(--border)}
 .year-pill button:last-child{border-right:none}
@@ -260,6 +261,7 @@ tr.removing td{animation:rowFadeOut .35s ease forwards;overflow:hidden}
       <div class="header-sub">Medicare Part B Claims &bull; Sales Targeting Dashboard</div>
     </div>
     <div class="header-right">
+      <div class="version-indicator" title="Build version">v 05_05_26_0911</div>
       <div class="year-pill" id="yearPill">
         <button data-yr="" class="active">All Years</button>
         <button data-yr="2022">2022</button>
