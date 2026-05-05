@@ -28,9 +28,10 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
 
 /* Header */
 .header{display:flex;justify-content:space-between;align-items:flex-end;padding:20px 0 24px;margin-bottom:4px}
-.header h1{font-family:'Instrument Serif',serif;font-size:32px;color:var(--text);line-height:1.1;font-weight:400}
+.header h1{font-family:'DM Sans',system-ui,sans-serif;font-size:32px;color:var(--text);line-height:1.1;font-weight:700;letter-spacing:-0.4px}
 .header h1 span{color:var(--accent)}
-.header-sub{font-size:13px;color:var(--text3);margin-top:4px;font-weight:400}
+.header-sub{font-size:13px;color:var(--text3);margin-top:4px;font-weight:400;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.version-indicator{font-size:10px;color:var(--text3);background:var(--surface2);border:1px solid var(--border);border-radius:999px;padding:2px 7px;line-height:1;box-shadow:var(--shadow-sm)}
 .header-right{display:flex;align-items:center;gap:10px}
 .version-indicator{font-size:11px;color:var(--text3);background:var(--surface2);border:1px solid var(--border);border-radius:999px;padding:3px 8px;line-height:1;box-shadow:var(--shadow-sm)}
 .year-pill{display:flex;background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;box-shadow:var(--shadow-sm)}
@@ -258,7 +259,7 @@ tr.removing td{animation:rowFadeOut .35s ease forwards;overflow:hidden}
   <div class="header">
     <div>
       <h1>Cardiology <span>Prospects</span></h1>
-      <div class="header-sub">Medicare Part B Claims &bull; Sales Targeting Dashboard</div>
+      <div class="header-sub">Medicare Part B Claims &bull; Sales Targeting Dashboard <span class="version-indicator" title="Build version">v 05_05_26_0920</span></div>
     </div>
     <div class="header-right">
       <div class="version-indicator" title="Build version">v 05_05_26_0911</div>
@@ -447,6 +448,7 @@ function init() {
   applyFilters();
   bindEvents();
   updateColumnHeaders();
+  updateFavUI();
   setupFirebaseSyncWhenReady();
 }
 
