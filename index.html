@@ -33,6 +33,8 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
 .header-sub{font-size:13px;color:var(--text3);margin-top:4px;font-weight:400;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .version-indicator{font-size:10px;color:var(--text3);background:var(--surface2);border:1px solid var(--border);border-radius:999px;padding:2px 7px;line-height:1;box-shadow:var(--shadow-sm)}
 .header-right{display:flex;align-items:center;gap:10px}
+.user-top{display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:6px 8px;box-shadow:var(--shadow-sm)}
+.user-top .control-label{margin-right:2px}
 .version-indicator{font-size:11px;color:var(--text3);background:var(--surface2);border:1px solid var(--border);border-radius:999px;padding:3px 8px;line-height:1;box-shadow:var(--shadow-sm)}
 .year-pill{display:flex;background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;box-shadow:var(--shadow-sm)}
 .year-pill button{padding:8px 16px;border:none;background:transparent;color:var(--text2);font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;transition:all .15s;border-right:1px solid var(--border)}
@@ -259,10 +261,20 @@ tr.removing td{animation:rowFadeOut .35s ease forwards;overflow:hidden}
   <div class="header">
     <div>
       <h1>Cardiology <span>Prospects</span></h1>
-      <div class="header-sub">Medicare Part B Claims &bull; Sales Targeting Dashboard <span class="version-indicator" title="Build version">v 05_05_26_0920</span></div>
+      <div class="header-sub">Medicare Part B Claims &bull; Sales Targeting Dashboard <span class="version-indicator" title="Build version">v 05_05_26_1144</span></div>
     </div>
     <div class="header-right">
-      <div class="version-indicator" title="Build version">v 05_05_26_0911</div>
+      <div class="user-top">
+        <span class="control-label">User</span>
+        <select class="filter-select" id="userSelect">
+          <option value="John">John</option>
+          <option value="Lucy">Lucy</option>
+          <option value="Susan">Susan</option>
+          <option value="Mark">Mark</option>
+          <option value="Kathy">Kathy</option>
+          <option value="All">All</option>
+        </select>
+      </div>
       <div class="year-pill" id="yearPill">
         <button data-yr="" class="active">All Years</button>
         <button data-yr="2022">2022</button>
@@ -343,17 +355,6 @@ tr.removing td{animation:rowFadeOut .35s ease forwards;overflow:hidden}
   </div>
 
   <div class="fav-bar">
-    <div class="control-group">
-      <span class="control-label">User</span>
-      <select class="filter-select" id="userSelect">
-        <option value="John">John</option>
-        <option value="Lucy">Lucy</option>
-        <option value="Susan">Susan</option>
-        <option value="Mark">Mark</option>
-        <option value="Kathy">Kathy</option>
-        <option value="All">All</option>
-      </select>
-    </div>
     <button class="fav-toggle" id="favToggle" onclick="toggleFavView()">
       &#x2B50; Favorites <span class="fav-count" id="favCount">0</span>
     </button>
@@ -432,11 +433,20 @@ let favMode = false;
 let currentDetailRow = null;
 let lastToastContext = null;
 const USERS = ['John','Lucy','Susan','Mark','Kathy','All'];
+const DEFAULT_STATES_BY_USER = {
+  John: [],
+  Lucy: [],
+  Susan: [],
+  Mark: [],
+  Kathy: []
+};
 let selectedUser = localStorage.getItem('dashboardFavUser') || 'John';
 if (!USERS.includes(selectedUser)) selectedUser = 'John';
 let firebaseSyncReady = false;
 let favoritesUnsubscribe = null;
+let statePrefsUnsubscribe = null;
 let suppressFavoritePersist = false;
+let suppressStatePersist = false;
 
 const YEARS = ['2022','2023','2024','2025'];
 
@@ -481,6 +491,8 @@ function onStateCheck(st, checked) {
   if (checked) selectedStates.add(st); else selectedStates.delete(st);
   updateStateBtnLabel();
   renderStatePills();
+  persistSelectedStates();
+  logActivity('state_filter_changed', { action: checked ? 'add' : 'remove', state: st, selectedCount: selectedStates.size });
   applyFilters();
 }
 
@@ -489,6 +501,8 @@ function selectAllStates() {
   renderStateList(document.getElementById('stateSearch').value);
   updateStateBtnLabel();
   renderStatePills();
+  persistSelectedStates();
+  logActivity('state_filter_changed', { action: 'select_all', selectedCount: selectedStates.size });
   applyFilters();
 }
 
@@ -497,6 +511,8 @@ function clearStates() {
   renderStateList(document.getElementById('stateSearch').value);
   updateStateBtnLabel();
   renderStatePills();
+  persistSelectedStates();
+  logActivity('state_filter_changed', { action: 'clear_all', selectedCount: 0 });
   applyFilters();
 }
 
@@ -505,6 +521,8 @@ function removeState(st) {
   renderStateList(document.getElementById('stateSearch').value);
   updateStateBtnLabel();
   renderStatePills();
+  persistSelectedStates();
+  logActivity('state_filter_changed', { action: 'remove_pill', state: st, selectedCount: selectedStates.size });
   applyFilters();
 }
 
@@ -1048,11 +1066,13 @@ function setupFirebaseSyncWhenReady() {
   if (window.firebaseDashboardSync?.stateRef) {
     firebaseSyncReady = true;
     subscribeFavoritesForSelectedUser();
+    subscribeStatePrefsForSelectedUser();
     return;
   }
   window.addEventListener('firebaseDashboardSyncReady', () => {
     firebaseSyncReady = true;
     subscribeFavoritesForSelectedUser();
+    subscribeStatePrefsForSelectedUser();
   }, { once: true });
 }
 
@@ -1090,6 +1110,64 @@ function persistFavorites() {
   sync.set(targetRef, favoritesPayloadFromSet()).catch(() => {
     console.warn('Could not persist favorites to Firebase');
   });
+  logActivity('favorites_updated', { selectedCount: favorites.size });
+}
+
+function parseStatePrefsPayload(payload) {
+  if (!payload) return [];
+  if (Array.isArray(payload)) return payload.filter(Boolean);
+  if (payload && Array.isArray(payload.states)) return payload.states.filter(Boolean);
+  return [];
+}
+
+function statePrefsPayloadFromSet() {
+  return {
+    version: 1,
+    updatedAt: new Date().toISOString(),
+    states: [...selectedStates].sort()
+  };
+}
+
+function subscribeStatePrefsForSelectedUser() {
+  if (!firebaseSyncReady || !window.firebaseDashboardSync?.onValue || !window.firebaseDashboardSync?.child || !window.firebaseDashboardSync?.stateRef) return;
+  if (statePrefsUnsubscribe) { statePrefsUnsubscribe(); statePrefsUnsubscribe = null; }
+  if (selectedUser === 'All') return;
+  const sync = window.firebaseDashboardSync;
+  const targetRef = sync.child(sync.stateRef, `statePreferencesByUser/${selectedUser}`);
+  statePrefsUnsubscribe = sync.onValue(targetRef, (snap) => {
+    suppressStatePersist = true;
+    selectedStates.clear();
+    const persisted = parseStatePrefsPayload(snap.val());
+    const fallback = DEFAULT_STATES_BY_USER[selectedUser] || [];
+    (persisted.length ? persisted : fallback).forEach(s => selectedStates.add(s));
+    suppressStatePersist = false;
+    renderStateList(document.getElementById('stateSearch')?.value || '');
+    updateStateBtnLabel();
+    renderStatePills();
+    applyFilters();
+  });
+}
+
+function persistSelectedStates() {
+  if (suppressStatePersist || !firebaseSyncReady || selectedUser === 'All') return;
+  const sync = window.firebaseDashboardSync;
+  if (!sync?.set || !sync?.child || !sync?.stateRef) return;
+  const targetRef = sync.child(sync.stateRef, `statePreferencesByUser/${selectedUser}`);
+  sync.set(targetRef, statePrefsPayloadFromSet()).catch(() => {
+    console.warn('Could not persist state preferences to Firebase');
+  });
+}
+
+function logActivity(type, details = {}) {
+  if (!firebaseSyncReady || !window.firebaseDashboardSync?.push || !window.firebaseDashboardSync?.child || !window.firebaseDashboardSync?.stateRef) return;
+  const sync = window.firebaseDashboardSync;
+  const activityRef = sync.child(sync.stateRef, 'activityLog');
+  sync.push(activityRef, {
+    user: selectedUser,
+    type,
+    details,
+    ts: new Date().toISOString()
+  }).catch(() => {});
 }
 
 function toggleFav(row, btn) {
@@ -1453,7 +1531,12 @@ function bindEvents() {
     favMode = false;
     document.getElementById('favToggle').classList.remove('active');
     subscribeFavoritesForSelectedUser();
+    subscribeStatePrefsForSelectedUser();
     updateFavUI();
+    renderStateList(document.getElementById('stateSearch')?.value || '');
+    updateStateBtnLabel();
+    renderStatePills();
+    logActivity('user_switched', { to: selectedUser });
     applyFilters();
   });
 
@@ -1512,7 +1595,8 @@ init();
     ref,
     child,
     set,
-    onValue
+    onValue,
+    push
   } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-database.js";
 
   const firebaseConfig = {
@@ -1541,6 +1625,7 @@ init();
   window.firebaseDashboardSync = {
     set,
     onValue,
+    push,
     ref,
     child,
     stateRef,
