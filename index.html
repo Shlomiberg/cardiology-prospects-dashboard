@@ -260,8 +260,8 @@ tr.removing td{animation:rowFadeOut .35s ease forwards;overflow:hidden}
 <div class="container">
   <div class="header">
     <div>
-      <h1>Cardiology <span>Prospects</span></h1>
-      <div class="header-sub">Medicare Part B Claims &bull; Sales Targeting Dashboard <span class="version-indicator" title="Build version">v 05_05_26_1144</span></div>
+      <h1>Cardiology <span>Prospects</span> <span id="activeUserTitle" style="font-size:22px;color:var(--text3);font-weight:600"></span></h1>
+      <div class="header-sub">Medicare Part B Claims &bull; Sales Targeting Dashboard <span class="version-indicator" title="Build version">v 05_05_26_1220</span></div>
     </div>
     <div class="header-right">
       <div class="user-top">
@@ -275,6 +275,24 @@ tr.removing td{animation:rowFadeOut .35s ease forwards;overflow:hidden}
           <option value="All">All</option>
         </select>
       </div>
+      <div class="control-group">
+        <span class="control-label" id="stateControlLabel">John's Selected States</span>
+        <div class="ms-wrap" id="stateWrap">
+          <button class="ms-btn" id="stateBtn" onclick="toggleStateDropdown()">All States</button>
+          <div class="ms-drop" id="stateDrop">
+            <div class="ms-search"><input type="text" id="stateSearch" placeholder="Filter states..." oninput="filterStateList()"></div>
+            <div class="ms-actions">
+              <button class="ms-action-btn" onclick="selectAllStates()">Select All</button>
+              <button class="ms-action-btn" onclick="clearStates()">Clear</button>
+            </div>
+            <div id="stateList"></div>
+          </div>
+        </div>
+        <div class="ms-pills" id="statePills"></div>
+      </div>
+      <button class="fav-toggle" id="favToggle" onclick="toggleFavView()">
+        <span id="favTitleText">View John's Favorites</span> <span class="fav-count" id="favCount">0</span>
+      </button>
       <div class="year-pill" id="yearPill">
         <button data-yr="" class="active">All Years</button>
         <button data-yr="2022">2022</button>
@@ -309,21 +327,6 @@ tr.removing td{animation:rowFadeOut .35s ease forwards;overflow:hidden}
       </div>
     </div>
     <div class="control-group">
-      <span class="control-label">States</span>
-      <div class="ms-wrap" id="stateWrap">
-        <button class="ms-btn" id="stateBtn" onclick="toggleStateDropdown()">All States</button>
-        <div class="ms-drop" id="stateDrop">
-          <div class="ms-search"><input type="text" id="stateSearch" placeholder="Filter states..." oninput="filterStateList()"></div>
-          <div class="ms-actions">
-            <button class="ms-action-btn" onclick="selectAllStates()">Select All</button>
-            <button class="ms-action-btn" onclick="clearStates()">Clear</button>
-          </div>
-          <div id="stateList"></div>
-        </div>
-      </div>
-      <div class="ms-pills" id="statePills"></div>
-    </div>
-    <div class="control-group">
       <span class="control-label">Avg. Annual Patients</span>
       <div class="ms-wrap" id="patWrap">
         <button class="ms-btn" id="patBtn" onclick="togglePatDropdown()">All Volumes</button>
@@ -355,9 +358,6 @@ tr.removing td{animation:rowFadeOut .35s ease forwards;overflow:hidden}
   </div>
 
   <div class="fav-bar">
-    <button class="fav-toggle" id="favToggle" onclick="toggleFavView()">
-      &#x2B50; Favorites <span class="fav-count" id="favCount">0</span>
-    </button>
     <button class="fav-btn danger" id="clearAllBtn" onclick="clearAllFavorites()" style="display:none">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14"/></svg>
       Clear All
@@ -1253,6 +1253,13 @@ function clearAllFavorites() {
 
 function updateFavUI() {
   const n = favorites.size;
+  const userLabel = selectedUser === 'All' ? 'All Users' : (selectedUser.endsWith('s') ? `${selectedUser}'` : `${selectedUser}'s`);
+  const favTitle = document.getElementById('favTitleText');
+  if (favTitle) favTitle.textContent = selectedUser === 'All' ? 'View All Favorites' : `View ${userLabel} Favorites`;
+  const stateTitle = document.getElementById('stateControlLabel');
+  if (stateTitle) stateTitle.textContent = selectedUser === 'All' ? 'All Users Selected States' : `${userLabel} Selected States`;
+  const titleUser = document.getElementById('activeUserTitle');
+  if (titleUser) titleUser.textContent = selectedUser === 'All' ? 'All Users' : selectedUser;
   document.getElementById('favCount').textContent = n;
   document.getElementById('clearAllBtn').style.display = n > 0 && selectedUser !== 'All' ? '' : 'none';
 }
